@@ -1,0 +1,59 @@
+import logging
+from typing import Dict, Any, List, Optional
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+
+from app.ai.state import ComplaintState
+from app.ai.nodes.extract_fields import extract_fields_node, clean_and_parse_json
+
+from app.ai.nodes.completeness_check import completeness_check_node
+from app.ai.nodes.classify_severity import classify_severity_node
+from app.ai.nodes.risk_assessment import risk_assessment_node
+from app.ai.nodes.finalize import finalize_node
+from app.ai.groq_client import get_groq_client, execute_with_backoff
+
+logger = logging.getLogger(__name__)
+
+# Compile LangGraph workflow with MemorySaver (strictly in-memory, NOT PostgreSQL)
+checkpointer = MemorySaver()
+
+workflow = StateGraph(ComplaintState)
+
+workflow.add_node("extract_fields", extract_fields_node)
+workflow.add_node("completeness_check", completeness_check_node)
+workflow.add_node("classify_severity", classify_severity_node)
+workflow.add_node("risk_assessment", risk_assessment_node)
+workflow.add_node("finalize", finalize_node)
+
+workflow.set_entry_point("extract_fields")
+workflow.add_edge("extract_fields", "completeness_check")
+workflow.add_edge("completeness_check", "classify_severity")
+workflow.add_edge("classify_severity", "risk_assessment")
+workflow.add_edge("risk_assessment", "finalize")
+workflow.add_edge("finalize", END)
+
+complaint_app = workflow.compile(checkpointer=checkpointer)
+
+
+def run_complaint_analysis(raw_text: str, thread_id: str) -> Dict[str, Any]:
+    """
+    Executes the LangGraph analysis pipeline for a document, scoped by unique thread_id.
+    When attached to an existing session, retains thread_id and initializes a clean complaint context.
+    """
+    initial_state: ComplaintState = {
+        "thread_id": thread_id,
+        "raw_text": raw_text,
+        "extracted_fields": {},
+        "completeness": {},
+        "severity": {},
+        "risk_assessment": {},
+        "ai_summary": "",
+        "errors": [],
+        "messages": []
+    }
+
+    config = {"configurable": {"thread_id": thread_id}}
+    final_state = complaint_app.invoke(initial_state, config=config)
+    return final_state
+
+

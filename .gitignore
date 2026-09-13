@@ -1,0 +1,41 @@
+# Environment & secrets
+.env
+.env.local
+*.env
+
+# Python virtualenvs
+.venv/
+alvoa/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database file (keep schema, not data)
+*.db
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
